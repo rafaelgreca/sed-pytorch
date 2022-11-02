@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import librosa
+from torch.utils.data import DataLoader, Dataset
 from typing import Tuple
 from glob import glob
 
@@ -144,3 +145,12 @@ def _read_meta_path(path: str) -> pd.DataFrame:
                                                   4: "label"})
 
     return annotation_df
+
+def create_dataloader(dataset: Dataset,
+                      batch_size: int) -> DataLoader:
+    dataloader = DataLoader(dataset,
+                            batch_size=batch_size,
+                            shuffle=False,
+                            num_workers=0,
+                            pin_memory=True)
+    return dataloader
