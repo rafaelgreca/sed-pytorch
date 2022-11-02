@@ -1,19 +1,23 @@
 import torch
 import torch.nn as nn
 import os
+from typing import Tuple, List
 
 # All credits to: https://discuss.pytorch.org/t/any-pytorch-function-can-work-as-keras-timedistributed/1346
 class TimeDistributed(nn.Module):
     """
     Mimics the Keras TimeDistributed layer.
     """
-    def __init__(self, module: torch.nn.Module, batch_first: bool, layer_name: str):
+    def __init__(self,
+                 module: torch.nn.Module,
+                 batch_first: bool,
+                 layer_name: str) -> None:
         super(TimeDistributed, self).__init__()
         self.module = module
         self.batch_first = batch_first
         self.layer_name = layer_name
 
-    def forward(self, x):
+    def forward(self, x: torch.tensor) -> torch.tensor:
         if len(x.size()) <= 2:
             return self.module(x)
 
@@ -139,11 +143,13 @@ class SaveBestModel:
         self,
         output_dir: str,
         model_name: str
-    ):
+    ) -> None:
         self.best_valid_er = 1
         self.best_valid_f1 = 0.0
         self.output_dir = output_dir
         self.model_name = model_name
+        self.best_folds_f1 = [0.0, 0.0, 0.0, 0.0]
+        self.best_folds_er = [1.0, 1.0, 1.0, 1.0]
 
     def __call__(
         self,
@@ -152,7 +158,8 @@ class SaveBestModel:
         epoch: int,
         model: torch.nn.Module,
         optimizer: torch.optim,
-    ):
+        fold: int
+    ) -> None:
         if current_valid_er < self.best_valid_er:
             self.best_valid_er = current_valid_er
             self.best_valid_f1 = current_valid_f1
@@ -166,5 +173,32 @@ class SaveBestModel:
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                 },
-                os.path.join(self.output_dir, f"{self.model_name}.pth")
+                os.path.join(self.output_dir, f"{self.model_name}_fold{fold}.pth")
             )
+            self.best_folds_f1[fold] = current_valid_f1
+            self.best_folds_er[fold] = current_valid_er
+    
+    def get_best_metrics(self) -> Tuple[List, List]:
+        return self.best_folds_f1, self.best_folds_er
+
+class EarlyStopping:
+    def __init__(self,
+                 tolerance: int,
+                 delta: float = 0.0) -> None:
+        self.tolerance = tolerance
+        self.early_stop = False
+        self.counter = 0
+        self.delta = delta
+        self.best_er = None
+    
+    def __call__(self, validation_er):
+        if self.best_er is None:
+            self.best_er = validation_er
+        elif validation_er < self.best_er:
+            self.counter += 1
+            
+            if self.counter >= self.tolerance:
+                self.early_stop = True
+        else:
+            self.best_er = validation_er
+            self.counter = 0

@@ -8,7 +8,7 @@ import metrics
 from torch.utils.data import DataLoader
 from typing import Tuple
 from dataset import Tut_Dataset
-from model import SED, SaveBestModel
+from model import SED, SaveBestModel, EarlyStopping
 from sklearn.preprocessing import StandardScaler
 
 def train(
@@ -127,9 +127,20 @@ if __name__ == "__main__":
 
     _folds = [1, 2, 3, 4]
     _frames_per_second = int(args.sample_rate/(args.n_fft/2.0))
-
+    
+    # Create the model
+    epochs = 500
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = SED()
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-03, eps=1e-07)
+    loss = nn.BCELoss()
+    save_best_model = SaveBestModel(output_dir=args.output_dir,
+                                    model_name=f"best_model")
+        
     for fold in _folds:
+        early_stopping = EarlyStopping(tolerance=int(0.25 * epochs))
         scaler = StandardScaler()
+        
         print("\n--------------------------------")
         print(f"FOLD {fold}")
         print("--------------------------------\n")
@@ -219,18 +230,7 @@ if __name__ == "__main__":
         test_dataloader = utils.create_dataloader(dataset=test_dataset,
                                                   batch_size=128)
         
-        # Create the model
-        epochs = 150
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = SED()
-        optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-03, eps=1e-07)
-        loss = nn.BCELoss()
-        save_best_model = SaveBestModel(output_dir=args.output_dir,
-                                        model_name=f"best_model_fold{fold}")
-        
         print("\nTraining the model...\n")
-
-        # Training loop
         for epoch in range(1, epochs + 1):
             train_er, train_f1 = train(
                 device=device,
@@ -252,10 +252,20 @@ if __name__ == "__main__":
 
             print(f"Train Epoch: {epoch}/{epochs}")
             
+            early_stopping(validation_er=validation_er)
+            
             save_best_model(
                 current_valid_er=validation_er,
                 current_valid_f1=validation_f1,
                 epoch=epoch,
                 model=model,
                 optimizer=optimizer,
+                fold=fold
             )
+            
+            if early_stopping.early_stop:
+                break
+    
+    best_f1, best_er = save_best_model.get_best_metrics()
+    print(f"\nBest F1 Score: {best_f1}\nBest ER: {best_er}")
+    print(f"\nMean F1 Score: {np.mean(np.array(best_f1))}\nMean ER: {np.mean(np.array(best_er))}")
