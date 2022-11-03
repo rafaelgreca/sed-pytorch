@@ -185,8 +185,8 @@ class SaveBestModel:
                 },
                 os.path.join(self.output_dir, f"{self.model_name}_fold{fold}.pth"),
             )
-            self.best_folds_f1[fold] = current_valid_f1
-            self.best_folds_er[fold] = current_valid_er
+            self.best_folds_f1[fold-1] = current_valid_f1
+            self.best_folds_er[fold-1] = current_valid_er
 
     def get_best_metrics(self) -> Tuple[List, List]:
         return self.best_folds_f1, self.best_folds_er

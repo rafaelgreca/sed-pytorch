@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import metrics
+import pandas as pd
 from torch.utils.data import DataLoader
 from typing import Tuple
 from dataset import Tut_Dataset
@@ -160,6 +161,7 @@ if __name__ == "__main__":
     save_best_model = SaveBestModel(
         output_dir=args.output_dir, model_name=f"best_model"
     )
+    training_log = pd.DataFrame()
 
     for fold in _folds:
         early_stopping = EarlyStopping(tolerance=int(0.25 * epochs))
@@ -301,9 +303,24 @@ if __name__ == "__main__":
                 fold=fold,
             )
 
+            temp = pd.DataFrame(
+                {
+                    "epoch": [epoch],
+                    "fold": [fold],
+                    "training_f1": [train_f1],
+                    "training_er": [train_er],
+                    "validation_f1": [validation_f1],
+                    "validation_er": [validation_er],
+                }
+            )
+
+            training_log = pd.concat([training_log, temp], axis=0)
+            training_log = training_log.reset_index(drop=True)
+
             if early_stopping.early_stop:
                 break
 
+    training_log.to_csv("training_log.csv", sep=";", index=False)
     best_f1, best_er = save_best_model.get_best_metrics()
     best_f1 = np.array(best_f1)
     best_er = np.array(best_er)
